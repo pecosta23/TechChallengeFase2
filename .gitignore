@@ -1,0 +1,64 @@
+# ========================================
+# Terraform
+# ========================================
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.tfvars
+terraform.tfvars.json
+# Se usar arquivos .auto.tfvars (pessoais/sensíveis)
+*.auto.tfvars
+
+# Backups de plano
+*.tfplan
+
+# State remoto local (caso você use local backend)
+.terraform.tfstate
+
+# ========================================
+# Python
+# ========================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.egg-info/
+*.egg
+.eggs/
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Pipenv / Poetry
+Pipfile.lock
+poetry.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Logs, caches e temporários
+*.log
+*.tmp
+*.bak
+*.orig
+.cache/
+*.DS_Store
+Thumbs.db
+
+# ========================================
+# ZIPs de código (Lambda/Glue empacotados)
+# ========================================
+files/*.zip
