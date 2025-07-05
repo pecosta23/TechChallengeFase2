@@ -50,7 +50,7 @@ zip ../files/lambda.zip lambda/extract_b3.py
 cd ..
 ```
 
-### 3. Compacte a Lambda
+### 4. Inicialize e aplique com Terraform
 
 ```bash
 terraform init
