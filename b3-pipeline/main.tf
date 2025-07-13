@@ -3,27 +3,42 @@ provider "aws" {
 }
 
 # Bucket S3
-resource "aws_s3_bucket" "b3_data" {
-  bucket        = var.s3_bucket_name
+resource "aws_s3_bucket" "b3_raw_data" {
+  bucket        = var.s3_b3_raw_bucket_name
   force_destroy = true
 }
 
-# IAM para Lambda
+# Bucket S3
+resource "aws_s3_bucket" "b3_refined_data" {
+  bucket        = var.s3_b3_raw_bucket_name
+  force_destroy = true
+}
+
+
+# Lambda function to trigger Glue job
+resource "aws_s3_bucket_notification" "notify_lambda" {
+  bucket = aws_s3_bucket.b3_raw_data.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.trigger_glue.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "b3/"
+    filter_suffix       = ".parquet"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3]
+}
+
 resource "aws_iam_role" "lambda_exec" {
-  name = "lambda_exec_b3"
+  name = "lambda_exec_trigger_glue"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
+      Action    = "sts:AssumeRole",
       Effect    = "Allow",
-      Principal = { Service = "lambda.amazonaws.com" },
-      Action    = "sts:AssumeRole"
+      Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_s3_policy" {
-  role       = aws_iam_role.lambda_exec.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
@@ -31,36 +46,34 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Lambda Function
-resource "aws_lambda_function" "extract_b3" {
-  filename         = "files/lambda.zip"
-  function_name    = "extract_b3_pregao"
+resource "aws_iam_role_policy" "invoke_glue_policy" {
+  name = "invoke-glue"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = "glue:StartJobRun",
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "trigger_glue" {
+  filename         = "files/trigger_glue.zip" # contém handler.py
+  function_name    = "trigger_glue_job"
   role             = aws_iam_role.lambda_exec.arn
-  handler          = "extract_b3.lambda_handler"
+  handler          = "handler.lambda_handler"
   runtime          = "python3.11"
-  timeout          = 60
-  source_code_hash = filebase64sha256("files/lambda.zip")
+  source_code_hash = filebase64sha256("files/trigger_glue.zip")
+  timeout          = 30
 }
 
-# EventBridge para agendamento
-resource "aws_cloudwatch_event_rule" "daily_trigger" {
-  name                = "trigger_b3_lambda_daily"
-  schedule_expression = "rate(1 day)"
-}
 
-resource "aws_cloudwatch_event_target" "lambda_target" {
-  rule      = aws_cloudwatch_event_rule.daily_trigger.name
-  target_id = "lambda"
-  arn       = aws_lambda_function.extract_b3.arn
-}
 
-resource "aws_lambda_permission" "allow_eventbridge" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.extract_b3.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.daily_trigger.arn
-}
 
 # resource "aws_iam_role" "glue_role" {
 #   name = "glue_b3_role"
