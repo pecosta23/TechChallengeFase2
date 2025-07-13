@@ -1,5 +1,23 @@
 import requests
 import pandas as pd
+import boto3
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()  
+aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+aws_region = os.getenv("AWS_DEFAULT_REGION")
+
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=aws_access_key,
+    aws_secret_access_key=aws_secret_key,
+    region_name=aws_region
+)
+
+bucket_name = 'tech2fiap2025'
 
 url = "https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/eyJsYW5ndWFnZSI6InB0LWJyIiwicGFnZU51bWJlciI6MSwicGFnZVNpemUiOjEyMCwiaW5kZXgiOiJJQk9WIiwic2VnbWVudCI6IjEifQ=="
 
@@ -19,6 +37,8 @@ if response.status_code == 200:
         acoes = data["results"]
         df = pd.DataFrame(acoes)
 
+        df['data_coleta'] = datetime.now().strftime('%Y-%m-%d')
+
         df.rename(columns={
             "cod": "Código",
             "asset": "Ação",
@@ -27,11 +47,56 @@ if response.status_code == 200:
             "part": "Part. (%)"
         }, inplace=True)
 
-        colunas = ["Código", "Ação", "Tipo", "Qtde. Teórica", "Part. (%)"]
+        colunas = ["data_coleta", "Código", "Ação", "Tipo", "Qtde. Teórica", "Part. (%)"]
         df = df[colunas]
 
-        df.to_csv("carteira_ibov.csv", index=False, encoding="utf-8-sig")
+        def enviar_particionado_s3(df, bucket_name, s3_client):
+            data_hoje = datetime.now().strftime('%Y-%m-%d')
+            
+            print(f"Enviando dados particionados para {len(df)} ações...")
+            
+            for _, row in df.iterrows():
+                codigo_acao = row['Código']
+                
+                df_acao = pd.DataFrame([row])
+                
+                ano = datetime.now().strftime('%Y')
+                mes = datetime.now().strftime('%m')
+                dia = datetime.now().strftime('%d')
+                
+                s3_key = f"dados/ano={ano}/mes={mes}/dia={dia}/acao={codigo_acao}/carteira_ibov_{codigo_acao}_{data_hoje}.csv"
+                
+                local_temp_file = f"temp_{codigo_acao}_{data_hoje}.csv"
+                
+                try:
+                    df_acao.to_csv(local_temp_file, index=False, encoding="utf-8-sig")
+  
+                    s3_client.upload_file(local_temp_file, bucket_name, s3_key)
+                    print(f"✓ {codigo_acao}: s3://{bucket_name}/{s3_key}")
+                    
+                    os.remove(local_temp_file)
+                    
+                except Exception as e:
+                    print(f"✗ Erro ao enviar {codigo_acao}: {e}")
+                    
+                    if os.path.exists(local_temp_file):
+                        os.remove(local_temp_file)
+            
+            print(f"Finalizado! {len(df)} arquivos enviados com particionamento.")
+
+        enviar_particionado_s3(df, bucket_name, s3)
+        
+        local_file_path = f"carteira_ibov_consolidado_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        s3_file_key_consolidado = f"dados/consolidado/carteira_ibov_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        
+        df.to_csv(local_file_path, index=False, encoding="utf-8-sig")
+        print(f"\nArquivo consolidado salvo localmente: {local_file_path}")
         print(df.head())
+
+        s3.upload_file(local_file_path, bucket_name, s3_file_key_consolidado)
+        print(f"Arquivo consolidado enviado para S3: s3://{bucket_name}/{s3_file_key_consolidado}")
+        
+        os.remove(local_file_path)
     else:
         print("A chave 'results' não foi encontrada no JSON.")
         print("Conteúdo:", data)
