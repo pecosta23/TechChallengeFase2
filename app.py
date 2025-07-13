@@ -53,8 +53,6 @@ if response.status_code == 200:
         def enviar_particionado_s3(df, bucket_name, s3_client):
             data_hoje = datetime.now().strftime('%Y-%m-%d')
             
-            print(f"Enviando dados particionados em Parquet para {len(df)} ações...")
-            
             for _, row in df.iterrows():
                 codigo_acao = row['Código']
                 
@@ -90,8 +88,6 @@ if response.status_code == 200:
         s3_file_key_consolidado = f"dados/consolidado/carteira_ibov_{datetime.now().strftime('%Y-%m-%d')}.parquet"
         
         df.to_parquet(local_file_path, index=False, engine='pyarrow')
-        print(f"\nArquivo consolidado salvo localmente em Parquet: {local_file_path}")
-        print(df.head())
 
         s3.upload_file(local_file_path, bucket_name, s3_file_key_consolidado)
         print(f"Arquivo consolidado Parquet enviado para S3: s3://{bucket_name}/{s3_file_key_consolidado}")
