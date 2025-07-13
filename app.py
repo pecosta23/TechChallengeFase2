@@ -53,7 +53,7 @@ if response.status_code == 200:
         def enviar_particionado_s3(df, bucket_name, s3_client):
             data_hoje = datetime.now().strftime('%Y-%m-%d')
             
-            print(f"Enviando dados particionados para {len(df)} ações...")
+            print(f"Enviando dados particionados em Parquet para {len(df)} ações...")
             
             for _, row in df.iterrows():
                 codigo_acao = row['Código']
@@ -64,12 +64,12 @@ if response.status_code == 200:
                 mes = datetime.now().strftime('%m')
                 dia = datetime.now().strftime('%d')
                 
-                s3_key = f"dados/ano={ano}/mes={mes}/dia={dia}/acao={codigo_acao}/carteira_ibov_{codigo_acao}_{data_hoje}.csv"
+                s3_key = f"dados/ano={ano}/mes={mes}/dia={dia}/acao={codigo_acao}/carteira_ibov_{codigo_acao}_{data_hoje}.parquet"
                 
-                local_temp_file = f"temp_{codigo_acao}_{data_hoje}.csv"
+                local_temp_file = f"temp_{codigo_acao}_{data_hoje}.parquet"
                 
                 try:
-                    df_acao.to_csv(local_temp_file, index=False, encoding="utf-8-sig")
+                    df_acao.to_parquet(local_temp_file, index=False, engine='pyarrow')
   
                     s3_client.upload_file(local_temp_file, bucket_name, s3_key)
                     print(f"✓ {codigo_acao}: s3://{bucket_name}/{s3_key}")
@@ -82,19 +82,19 @@ if response.status_code == 200:
                     if os.path.exists(local_temp_file):
                         os.remove(local_temp_file)
             
-            print(f"Finalizado! {len(df)} arquivos enviados com particionamento.")
+            print(f"Finalizado! {len(df)} arquivos Parquet enviados com particionamento.")
 
         enviar_particionado_s3(df, bucket_name, s3)
         
-        local_file_path = f"carteira_ibov_consolidado_{datetime.now().strftime('%Y-%m-%d')}.csv"
-        s3_file_key_consolidado = f"dados/consolidado/carteira_ibov_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        local_file_path = f"carteira_ibov_consolidado_{datetime.now().strftime('%Y-%m-%d')}.parquet"
+        s3_file_key_consolidado = f"dados/consolidado/carteira_ibov_{datetime.now().strftime('%Y-%m-%d')}.parquet"
         
-        df.to_csv(local_file_path, index=False, encoding="utf-8-sig")
-        print(f"\nArquivo consolidado salvo localmente: {local_file_path}")
+        df.to_parquet(local_file_path, index=False, engine='pyarrow')
+        print(f"\nArquivo consolidado salvo localmente em Parquet: {local_file_path}")
         print(df.head())
 
         s3.upload_file(local_file_path, bucket_name, s3_file_key_consolidado)
-        print(f"Arquivo consolidado enviado para S3: s3://{bucket_name}/{s3_file_key_consolidado}")
+        print(f"Arquivo consolidado Parquet enviado para S3: s3://{bucket_name}/{s3_file_key_consolidado}")
         
         os.remove(local_file_path)
     else:
